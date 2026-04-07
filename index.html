@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbearia</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #2b2b2b; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: #3d3d3d; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 100%; max-width: 450px; text-align: center; }
+        h1 { color: #f0a500; font-size: 24px; margin-bottom: 20px; }
+        .btn-init { background-color: #555; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-bottom: 20px; width: 100%; font-weight: bold; }
+        .btn-init:hover { background-color: #666; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #ccc; }
+        input, select { width: 100%; padding: 10px; border: none; border-radius: 5px; box-sizing: border-box; background: #eee; color: #333; }
+        .btn-agendar { background-color: #f0a500; color: #2b2b2b; border: none; padding: 12px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; margin-top: 10px; }
+        .btn-agendar:hover { background-color: #d18f00; }
+        #mensagem { margin-top: 20px; padding: 10px; border-radius: 5px; display: none; font-weight: bold; }
+        .sucesso { background-color: #28a745; color: white; }
+        .erro { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body onload="carregarBarbeiros()">
+
+<div class="container">
+    <h1>✂️ Barbearia</h1>
+    
+    <button class="btn-init" onclick="inicializarBanco()">Inicializar Banco de Dados</button>
+
+    <div class="form-group">
+        <label for="cliente_nome">Seu Nome:</label>
+        <input type="text" id="cliente_nome" placeholder="Digite seu nome" required>
+    </div>
+
+    <div class="form-group">
+        <label for="barbeiro_id">Escolha o Barbeiro:</label>
+        <select id="barbeiro_id" onchange="carregarHorarios()">
+            <option value="">Selecione...</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="horario_escolhido">Escolha o Horário:</label>
+        <select id="horario_escolhido">
+            <option value="">Selecione um barbeiro primeiro...</option>
+        </select>
+    </div>
+
+    <button class="btn-agendar" onclick="fazerAgendamento()">Confirmar Agendamento</button>
+
+    <div id="mensagem"></div>
+</div>
+
+<script>
+    function mostrarMensagem(texto, tipo) {
+        const msgDiv = document.getElementById('mensagem');
+        msgDiv.textContent = texto;
+        msgDiv.className = tipo; 
+        msgDiv.style.display = 'block';
+    }
+
+    async function carregarBarbeiros() {
+        const selectBarbeiro = document.getElementById('barbeiro_id');
+        try {
+            const response = await fetch('/barbeiros');
+            const barbeiros = await response.json();
+            
+            selectBarbeiro.innerHTML = '<option value="">Selecione o profissional</option>';
+            barbeiros.forEach(b => {
+                selectBarbeiro.innerHTML += `<option value="${b.id}">${b.nome}</option>`;
+            });
+        } catch (error) {
+            console.error("Banco ainda não criado.");
+        }
+    }
+
+    async function carregarHorarios() {
+        const barbeiro_id = document.getElementById('barbeiro_id').value;
+        const selectHorario = document.getElementById('horario_escolhido');
+        
+        if (!barbeiro_id) {
+            selectHorario.innerHTML = '<option value="">Selecione um barbeiro primeiro...</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/horarios-livres?barbeiro_id=${barbeiro_id}`);
+            const horarios = await response.json();
+            
+            selectHorario.innerHTML = '<option value="">Selecione o horário</option>';
+            
+            if (horarios.length === 0) {
+                selectHorario.innerHTML = '<option value="">Agenda lotada!</option>';
+            } else {
+                horarios.forEach(h => {
+                    selectHorario.innerHTML += `<option value="${h}">${h}</option>`;
+                });
+            }
+        } catch (error) {
+            selectHorario.innerHTML = '<option value="">Erro ao buscar horários.</option>';
+        }
+    }
+
+    async function inicializarBanco() {
+        try {
+            const response = await fetch('/init-db', { method: 'POST' });
+            const result = await response.json();
+            mostrarMensagem(result.message, 'sucesso');
+            carregarBarbeiros();
+            document.getElementById('horario_escolhido').innerHTML = '<option value="">Selecione um barbeiro primeiro...</option>';
+        } catch (error) {
+            mostrarMensagem('Erro de conexão.', 'erro');
+        }
+    }
+
+    async function fazerAgendamento() {
+        const nome = document.getElementById('cliente_nome').value;
+        const barbeiro_id = document.getElementById('barbeiro_id').value;
+        const horario = document.getElementById('horario_escolhido').value;
+
+        if (!nome || !barbeiro_id || !horario) {
+            mostrarMensagem('Preencha nome e escolha os horários.', 'erro');
+            return;
+        }
+
+        try {
+            const url = `/agendar?cliente_nome=${encodeURIComponent(nome)}&barbeiro_id=${barbeiro_id}&horario=${encodeURIComponent(horario)}`;
+            const response = await fetch(url, { method: 'POST' });
+            const result = await response.json();
+
+            if (response.ok) {
+                mostrarMensagem(result.message, 'sucesso');
+                carregarHorarios(); // Remove o horário reservado da tela na mesma hora
+            } else {
+                mostrarMensagem(result.detail, 'erro');
+            }
+        } catch (error) {
+            mostrarMensagem('Erro de comunicação.', 'erro');
+        }
+    }
+</script>
+
+</body>
+</html>
